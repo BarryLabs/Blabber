@@ -1,0 +1,91 @@
+pragma solidity 0.8.14;
+
+import {SafeTransferLib} from "@rari-capital/solmate/src/utils/SafeTransferLib.sol";
+
+contract BettingEscrow {
+    event BetOffered(uint256 betId);
+    event BetAccepted(uint256 betId);
+    event BetSettled(uint256 betId);
+    event BetWithdrawn(uint256 betId);
+
+    error WrongPaymentAmount();
+    error NotRecipient();
+    error NotOffered();
+    error NotCreator();
+    error NotAdjudicator();
+    error NotAccepted();
+    error StillWaiting();
+
+    enum Status {
+        Offered,
+        Accepted,
+        Settled
+    }
+
+    struct Bet {
+        uint256 id;
+        address one;
+        address two;
+        uint256 whoWon;
+        uint256 amount;
+        Status status;
+    }
+
+    mapping(uint256 => Bet) public bets;
+    uint256 public nextBetId = 0;
+    bool internal locked;
+
+    modifier noReentrant(){
+        require(!locked, "No re-entrancy");
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    function offerBet(address _one, uint256 _whoWon) external payable {
+
+        Bet memory bet = Bet({
+            id: nextBetId,
+            one: msg.sender,
+            two: two,
+            whoWon: _whoWon,
+            amount: msg.value,
+            status: Status.Offered
+        });
+        bets[nextBetId] = bet;
+        emit BetOffered(nextBetId);
+        nextBetId += 1;
+    }
+
+    function withdrawOffer(uint256 _betId) external noReentrant {
+        Bet memory bet = bets[_betId];
+        if (msg.sender != bet.one) revert NotCreator();
+        if (bet.status != Status.Offered) revert NotOffered();
+        uint256 _amount = bet.amount;
+        delete bets[_betId];
+        SafeTransferLib.safeTransferETH(msg.sender, _amount);
+        emit BetWithdrawn(_betId);
+    }
+
+    function acceptBet(uint256 _betId) external payable {
+        Bet memory bet = bets[_betId];
+        if (msg.value != bet.amount) revert WrongPaymentAmount();
+        if (msg.sender != bet.two) revert NotRecipient();
+        if (bet.status != Status.Offered) revert NotOffered();
+        bet[_betId].status = Status.Accepted;
+        emit BetAccepted(_betId);
+    }
+
+    function settleBet(uint256 _betId) external noReentrant {
+        Bet memory bet = bets[_betId];
+        if (bet.status != Status.Accepted) revert NotAccepted();
+
+        bets[_betId].status = Status.Settled;
+        if (!msg.sender()) {
+            SafeTransferLib.safeTransferETH(bet.one, bet.amount);
+        } else {
+            SafeTransferLib.safeTransferETH(bet.two, bet.amount);
+        }
+        emit BetSettled(_betId);
+    }
+}
