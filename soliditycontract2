@@ -7,6 +7,7 @@ contract Betting {
     uint8[] public bets;
     uint8 public numBets;
     uint8 public result;
+    mapping(address => bool) public betPlaced;
 
     constructor(uint _betAmount) public {
         owner = msg.sender;
@@ -15,10 +16,12 @@ contract Betting {
 
     function placeBet(uint8 _player) public payable {
         require(msg.value == betAmount, "Incorrect bet amount.");
+        require(!betPlaced[msg.sender], "You have already placed a bet.");
 
         bettors.push(msg.sender);
         bets.push(_player);
         numBets++;
+        betPlaced[msg.sender] = true;
     }
 
     function setResult(uint8 _result) public {
@@ -34,6 +37,38 @@ contract Betting {
             if (bets[i] == result) {
                 bettors[i].transfer(2 * betAmount);
             }
+        }
+
+        owner.transfer(address(this).balance);
+    }
+
+    function cancelBet() public {
+        require(betPlaced[msg.sender], "You have not placed a bet.");
+        require(result == 0, "The result has already been set.");
+
+        uint index = 0;
+        for (uint i = 0; i < numBets; i++) {
+            if (bettors[i] == msg.sender) {
+                index = i;
+                break;
+            }
+        }
+
+        bettors[index] = bettors[numBets - 1];
+        bets[index] = bets[numBets - 1];
+        bettors.length--;
+        bets.length--;
+        numBets--;
+        betPlaced[msg.sender] = false;
+        msg.sender.transfer(betAmount);
+    }
+
+    function refundBets() public {
+        require(msg.sender == owner, "Only the contract owner can refund the bets.");
+        require(result == 0, "The result has already been set.");
+
+        for (uint i = 0; i < numBets; i++) {
+            bettors[i].transfer(betAmount);
         }
 
         owner.transfer(address(this).balance);
