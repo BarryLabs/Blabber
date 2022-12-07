@@ -1,0 +1,41 @@
+pragma solidity ^0.6.0;
+
+contract Betting {
+    address payable public owner;
+    uint public betAmount;
+    address payable[] public bettors;
+    uint8[] public bets;
+    uint8 public numBets;
+    uint8 public result;
+
+    constructor(uint _betAmount) public {
+        owner = msg.sender;
+        betAmount = _betAmount;
+    }
+
+    function placeBet(uint8 _player) public payable {
+        require(msg.value == betAmount, "Incorrect bet amount.");
+
+        bettors.push(msg.sender);
+        bets.push(_player);
+        numBets++;
+    }
+
+    function setResult(uint8 _result) public {
+        require(msg.sender == owner, "Only the contract owner can set the result.");
+        require(_result <= numBets, "Invalid result.");
+        result = _result;
+    }
+
+    function resolveBet() public {
+        require(result != 0, "The result has not been set.");
+
+        for (uint i = 0; i < numBets; i++) {
+            if (bets[i] == result) {
+                bettors[i].transfer(2 * betAmount);
+            }
+        }
+
+        owner.transfer(address(this).balance);
+    }
+}
